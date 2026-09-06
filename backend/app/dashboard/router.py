@@ -161,7 +161,7 @@ async def get_alert(
         .execute()
     )
 
-    if not resp.data:
+    if not resp or not resp.data:
         from fastapi import HTTPException, status
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

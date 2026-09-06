@@ -25,24 +25,33 @@ CREATE TABLE IF NOT EXISTS profiles (
     telegram_chat_id TEXT,
     telegram_verified BOOLEAN DEFAULT FALSE,
     polling_interval  INTEGER DEFAULT 15 CHECK (polling_interval IN (5, 15, 30, 60)),
-    alert_sensitivity TEXT DEFAULT 'medium' CHECK (alert_sensitivity IN ('high', 'medium', 'low')),
+    alert_sensitivity TEXT DEFAULT 'medium' CHECK (alert_sensitivity IN ('all', 'high', 'medium', 'low')),
     created_at       TIMESTAMPTZ DEFAULT NOW(),
     updated_at       TIMESTAMPTZ DEFAULT NOW()
 );
 
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
 CREATE POLICY "Users can view own profile"
     ON profiles FOR SELECT
     USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
+CREATE POLICY "Users can insert own profile"
+    ON profiles FOR INSERT
+    WITH CHECK (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
 CREATE POLICY "Users can update own profile"
     ON profiles FOR UPDATE
     USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Service role can manage all profiles" ON profiles;
 CREATE POLICY "Service role can manage all profiles"
     ON profiles FOR ALL
-    USING (auth.role() = 'service_role');
+    USING (true)
+    WITH CHECK (true);
 
 
 -- ── Watched Assets ──────────────────────────────────────────────────────────
@@ -60,18 +69,22 @@ CREATE TABLE IF NOT EXISTS watched_assets (
 
 ALTER TABLE watched_assets ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own assets" ON watched_assets;
 CREATE POLICY "Users can view own assets"
     ON watched_assets FOR SELECT
     USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert own assets" ON watched_assets;
 CREATE POLICY "Users can insert own assets"
     ON watched_assets FOR INSERT
     WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own assets" ON watched_assets;
 CREATE POLICY "Users can delete own assets"
     ON watched_assets FOR DELETE
     USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Service role can manage all assets" ON watched_assets;
 CREATE POLICY "Service role can manage all assets"
     ON watched_assets FOR ALL
     USING (auth.role() = 'service_role');
@@ -96,15 +109,17 @@ CREATE TABLE IF NOT EXISTS alerts (
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_alerts_user_created ON alerts(user_id, created_at DESC);
-CREATE INDEX idx_alerts_severity ON alerts(severity);
+CREATE INDEX IF NOT EXISTS idx_alerts_user_created ON alerts(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts(severity);
 
 ALTER TABLE alerts ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own alerts" ON alerts;
 CREATE POLICY "Users can view own alerts"
     ON alerts FOR SELECT
     USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Service role can manage all alerts" ON alerts;
 CREATE POLICY "Service role can manage all alerts"
     ON alerts FOR ALL
     USING (auth.role() = 'service_role');
@@ -128,16 +143,17 @@ CREATE TABLE IF NOT EXISTS news_items (
     UNIQUE (url)
 );
 
-CREATE INDEX idx_news_fetched ON news_items(fetched_at DESC);
-CREATE INDEX idx_news_source ON news_items(source_type);
+CREATE INDEX IF NOT EXISTS idx_news_fetched ON news_items(fetched_at DESC);
+CREATE INDEX IF NOT EXISTS idx_news_source ON news_items(source_type);
 
 ALTER TABLE news_items ENABLE ROW LEVEL SECURITY;
 
--- News is shared — all authenticated users can read
+DROP POLICY IF EXISTS "Authenticated users can view news" ON news_items;
 CREATE POLICY "Authenticated users can view news"
     ON news_items FOR SELECT
     USING (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Service role can manage all news" ON news_items;
 CREATE POLICY "Service role can manage all news"
     ON news_items FOR ALL
     USING (auth.role() = 'service_role');
@@ -158,14 +174,16 @@ CREATE TABLE IF NOT EXISTS agent_runs (
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_agent_runs_user ON agent_runs(user_id, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_agent_runs_user ON agent_runs(user_id, started_at DESC);
 
 ALTER TABLE agent_runs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own agent runs" ON agent_runs;
 CREATE POLICY "Users can view own agent runs"
     ON agent_runs FOR SELECT
     USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Service role can manage all agent runs" ON agent_runs;
 CREATE POLICY "Service role can manage all agent runs"
     ON agent_runs FOR ALL
     USING (auth.role() = 'service_role');

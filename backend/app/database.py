@@ -19,13 +19,12 @@ def get_supabase_client() -> Client:
     return create_client(settings.supabase_url, settings.supabase_service_role_key)
 
 
-@lru_cache
 def get_supabase_anon_client() -> Client:
     """
-    Return a cached Supabase client using the anon (public) key.
+    Return a fresh Supabase client using the anon (public) key.
     
-    This client respects Row Level Security and should be used
-    for operations scoped to an authenticated user.
+    This client respects Row Level Security and maintains an isolated
+    session per call for user sign-in flows.
     """
     settings = get_settings()
     return create_client(settings.supabase_url, settings.supabase_anon_key)

@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 # Severity thresholds per sensitivity level
 SENSITIVITY_THRESHOLDS = {
+    "all": 1,      # Send all alerts (low, medium, and high)
     "high": 1,     # Send all alerts
     "medium": 4,   # Send impact >= 4
     "low": 7,      # Send only critical (impact >= 7)
@@ -148,7 +149,7 @@ class AgentWorker:
                 .maybe_single()
                 .execute()
             )
-            if not profile_resp.data:
+            if not profile_resp or not profile_resp.data:
                 logger.error(f"User {user_id} not found, skipping scan.")
                 return
 

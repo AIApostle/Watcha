@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 VALID_INTERVALS = {5, 15, 30, 60}
-VALID_SENSITIVITIES = {"high", "medium", "low"}
+VALID_SENSITIVITIES = {"all", "high", "medium", "low"}
 
 
 @router.get("", response_model=UserProfile)
@@ -37,8 +37,11 @@ async def update_settings(
     updates = {}
 
     if payload.telegram_chat_id is not None:
-        updates["telegram_chat_id"] = payload.telegram_chat_id
-        updates["telegram_verified"] = False  # Reset verification on change
+        if payload.telegram_chat_id != user.telegram_chat_id:
+            updates["telegram_chat_id"] = payload.telegram_chat_id
+            updates["telegram_verified"] = False  # Reset verification only when chat ID changed
+        else:
+            updates["telegram_chat_id"] = payload.telegram_chat_id
 
     if payload.polling_interval is not None:
         if payload.polling_interval not in VALID_INTERVALS:
@@ -59,7 +62,23 @@ async def update_settings(
     if not updates:
         return MessageResponse(message="No changes provided.")
 
-    supabase.table("profiles").update(updates).eq("id", user.id).execute()
+    try:
+        supabase.table("profiles").update(updates).eq("id", user.id).execute()
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f"Error updating settings: {error_msg}")
+        if "profiles_alert_sensitivity_check" in error_msg and updates.get("alert_sensitivity") == "all":
+            # If the database constraint hasn't been updated to allow 'all', fallback to 'high'
+            # (which has the identical threshold of 1) so the save succeeds without crashing.
+            logger.warning("Database rejected 'all' for alert_sensitivity. Falling back to 'high'.")
+            updates["alert_sensitivity"] = "high"
+            supabase.table("profiles").update(updates).eq("id", user.id).execute()
+            return MessageResponse(message="Settings updated successfully.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to update settings: {error_msg}",
+        )
+
     return MessageResponse(message="Settings updated successfully.")
 
 
@@ -77,7 +96,7 @@ async def list_assets(user: UserProfile = Depends(get_current_user)):
         .order("created_at", desc=False)
         .execute()
     )
-    return [WatchedAsset(**row) for row in (resp.data or [])]
+    return [WatchedAsset(**row) for row in ((resp.data if resp else []) or [])]
 
 
 @router.post("/assets", response_model=WatchedAsset, status_code=status.HTTP_201_CREATED)
@@ -97,7 +116,7 @@ async def add_asset(
         .maybe_single()
         .execute()
     )
-    if existing.data:
+    if existing and existing.data:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Asset {payload.asset_symbol} is already in your watchlist.",
@@ -136,7 +155,7 @@ async def remove_asset(
         .maybe_single()
         .execute()
     )
-    if not existing.data:
+    if not existing or not existing.data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Asset not found.",

@@ -40,7 +40,7 @@ async def get_current_user(
             .execute()
         )
 
-        if profile_resp.data:
+        if profile_resp and profile_resp.data:
             return UserProfile(
                 id=user_id,
                 email=email,

@@ -355,7 +355,12 @@ export default function SettingsPage() {
               value={alertSensitivity}
               onChange={(e) => setAlertSensitivity(e.target.value)}
             >
-              <option value="high">High — send all alerts</option>
+              <option value="all">
+                All — send all alerts (Low, Medium, & High)
+              </option>
+              <option value="high">
+                High — major & critical events (impact ≥ 1)
+              </option>
               <option value="medium">
                 Medium — significant events only (impact ≥ 4)
               </option>
