@@ -45,11 +45,10 @@ Key Analysis Rules:
 2. Watched People & Leaders (e.g. Donald Trump, Jerome Powell, Christine Lagarde, Elon Musk): Carefully inspect speeches, press conferences, Truth Social / X posts, or executive commentary. Directly correlate their words or actions to their market impact (e.g. Powell's interest rate stance, Trump's tariffs/trade rhetoric).
 3. Watched Organizations & Institutions (e.g. Federal Reserve, OPEC, ECB, SEC, US Treasury): Analyze official policy decisions, quota announcements, rate guidance, or regulatory actions. Explain how they affect commodities (Gold, Oil) and currency pairs.
 4. Freshness & Breaking News: Focus STRICTLY on breaking news and developments from the past 24 hours. Ignore stale historical context or already-digested news from previous cycles.
-5. Severity and Impact Scoring:
-   - 1-3: Low impact — minor commentary, routine announcements
-   - 4-6: Medium impact — notable calendar releases, policy hints, trade rhetoric
-   - 7-8: High impact — major surprise in NFP/CPI, tariff threats/enactments, unexpected rate moves
-   - 9-10: Critical — emergency rate decisions, severe trade sanctions, black swan events
+5. Severity Scoring (MUST be one of: "critical", "warning", "info"):
+   - "critical" (Impact 9-10): Emergency decisions, severe sanctions, black swan events, critical surprises
+   - "warning" (Impact 5-8): Major calendar surprises, strong trade rhetoric, notable policy shifts
+   - "info" (Impact 1-4): Routine commentary, minor data releases, general market updates
 
 Only generate alerts for items that are genuinely relevant to the user's watched assets, leaders, or organizations.
 If nothing significant is found, return {"alerts": [], "market_mood": "neutral", "mood_summary": "No significant market-moving events detected."}.
@@ -134,8 +133,42 @@ async def analyze_market_data(
                     content = data["choices"][0]["message"]["content"]
                     result = json.loads(content)
 
+                    # Sanitize and normalize alert fields to database constraints
+                    cleaned_alerts = []
+                    for alert in result.get("alerts", []):
+                        raw_sev = str(alert.get("severity") or "").lower().strip()
+                        impact = alert.get("impact_score") or 5
+                        try:
+                            impact = max(1, min(10, int(impact)))
+                        except (TypeError, ValueError):
+                            impact = 5
+                        alert["impact_score"] = impact
+
+                        if raw_sev in ("critical", "extreme", "severe") or impact >= 9:
+                            alert["severity"] = "critical"
+                        elif raw_sev in ("warning", "high", "medium", "moderate") or impact >= 5:
+                            alert["severity"] = "warning"
+                        else:
+                            alert["severity"] = "info"
+
+                        raw_sent = str(alert.get("sentiment") or "").lower().strip()
+                        if raw_sent in ("bullish", "positive", "long"):
+                            alert["sentiment"] = "bullish"
+                        elif raw_sent in ("bearish", "negative", "short"):
+                            alert["sentiment"] = "bearish"
+                        else:
+                            alert["sentiment"] = "neutral"
+
+                        atype = str(alert.get("alert_type") or "").lower().strip()
+                        if atype not in {"price_move", "news", "social", "calendar", "composite"}:
+                            alert["alert_type"] = "composite"
+
+                        cleaned_alerts.append(alert)
+
+                    result["alerts"] = cleaned_alerts
+
                     logger.info(
-                        f"AI Analysis using {model_name}: {len(result.get('alerts', []))} alerts, "
+                        f"AI Analysis using {model_name}: {len(cleaned_alerts)} alerts, "
                         f"mood={result.get('market_mood', 'unknown')}"
                     )
                     return result

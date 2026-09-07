@@ -116,7 +116,7 @@ class SocialMonitor(BaseCollector):
                 parsed = feedparser.parse(feed_url)
 
                 if parsed.bozo and not parsed.entries:
-                    logger.warning(f"Social feed {feed_name} error: {parsed.bozo_exception}")
+                    logger.debug(f"Social feed {feed_name} skipped (non-XML or unavailable): {parsed.bozo_exception}")
                     continue
 
                 for entry in parsed.entries[:max_per_feed]:

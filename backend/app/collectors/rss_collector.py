@@ -77,7 +77,7 @@ class RSSCollector(BaseCollector):
         parsed = feedparser.parse(feed_url)
 
         if parsed.bozo and not parsed.entries:
-            logger.warning(f"RSS feed {feed_name} returned errors: {parsed.bozo_exception}")
+            logger.debug(f"RSS feed {feed_name} skipped (non-XML or unavailable): {parsed.bozo_exception}")
             return []
 
         now = datetime.now(timezone.utc)

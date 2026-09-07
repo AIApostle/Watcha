@@ -132,9 +132,12 @@ class XScraper(BaseCollector):
                 response = await client.get(X_SYNDICATION_URL, headers=self._headers)
 
                 if response.status_code != 200:
-                    logger.warning(
-                        f"X Syndication returned status {response.status_code}: {response.text[:100]}"
-                    )
+                    if response.status_code == 429:
+                        logger.debug("X Syndication rate-limited (429), skipping Twitter syndication for this cycle.")
+                    else:
+                        logger.warning(
+                            f"X Syndication returned status {response.status_code}: {response.text[:100]}"
+                        )
                     return []
 
                 entries = self._extract_timeline_from_html(response.text)

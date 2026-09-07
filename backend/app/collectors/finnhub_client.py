@@ -41,6 +41,7 @@ class FinnhubCollector(BaseCollector):
     def __init__(self):
         self._api_key = get_settings().finnhub_api_key
         self._client = httpx.AsyncClient(timeout=15.0)
+        self._unsupported_symbols: set[str] = set()
 
     @property
     def name(self) -> str:
@@ -61,18 +62,19 @@ class FinnhubCollector(BaseCollector):
 
         Returns PriceData or None if the symbol is unsupported.
         """
+        if symbol in self._unsupported_symbols:
+            return await self._fallback_quote(symbol)
+
         finnhub_symbol = SYMBOL_MAP.get(symbol)
         if not finnhub_symbol:
-            logger.warning(f"No Finnhub mapping for symbol: {symbol}")
-            return None
+            return await self._fallback_quote(symbol)
 
         try:
             data = await self._request("/quote", {"symbol": finnhub_symbol})
 
             # Finnhub returns: c=current, o=open, h=high, l=low, pc=prev close, dp=% change, d=change
             if not data or data.get("c", 0) == 0:
-                logger.warning(f"No price data for {symbol} ({finnhub_symbol})")
-                return None
+                return await self._fallback_quote(symbol)
 
             return PriceData(
                 symbol=symbol,
@@ -88,7 +90,11 @@ class FinnhubCollector(BaseCollector):
                 else datetime.now(timezone.utc),
             )
         except Exception as e:
-            logger.warning(f"Finnhub quote unavailable for {symbol} ({e}), using live fallback quotes.")
+            if "403" in str(e):
+                self._unsupported_symbols.add(symbol)
+                logger.debug(f"Finnhub free tier does not support {symbol} (403), using live fallback.")
+            else:
+                logger.warning(f"Finnhub quote unavailable for {symbol} ({e}), using live fallback quotes.")
             return await self._fallback_quote(symbol)
 
     async def _fallback_quote(self, symbol: str) -> PriceData | None:

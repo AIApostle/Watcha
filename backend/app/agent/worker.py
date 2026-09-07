@@ -290,6 +290,31 @@ class AgentWorker:
                 if alert_type not in {"price_move", "news", "social", "calendar", "composite"}:
                     alert_type = "composite"
 
+                # Normalize fields to strictly satisfy database CHECK constraints:
+                # severity IN ('critical', 'warning', 'info')
+                raw_sev = str(alert_data.get("severity") or "").lower().strip()
+                raw_impact = alert_data.get("impact_score") or 5
+                try:
+                    impact_score = max(1, min(10, int(raw_impact)))
+                except (TypeError, ValueError):
+                    impact_score = 5
+
+                if raw_sev in ("critical", "extreme", "severe") or impact_score >= 9:
+                    severity = "critical"
+                elif raw_sev in ("warning", "high", "medium", "moderate") or impact_score >= 5:
+                    severity = "warning"
+                else:
+                    severity = "info"
+
+                # sentiment IN ('bullish', 'bearish', 'neutral')
+                raw_sent = str(alert_data.get("sentiment") or "").lower().strip()
+                if raw_sent in ("bullish", "positive", "long"):
+                    sentiment = "bullish"
+                elif raw_sent in ("bearish", "negative", "short"):
+                    sentiment = "bearish"
+                else:
+                    sentiment = "neutral"
+
                 # Send Telegram notification
                 sent = False
                 if chat_id and telegram_verified:
@@ -297,50 +322,42 @@ class AgentWorker:
                     if sent:
                         alerts_generated += 1
 
-                # Store in DB with fallback if calendar constraint is not yet migrated
+                # Base insert payload
+                db_payload = {
+                    "user_id": user_id,
+                    "asset_symbol": ", ".join(alert_data.get("affected_assets", [])),
+                    "alert_type": alert_type,
+                    "severity": severity,
+                    "title": alert_data.get("title", "Market Alert"),
+                    "body": alert_data.get("summary", ""),
+                    "ai_analysis": alert_data.get("summary", ""),
+                    "source_data": {
+                        "prices": [p.symbol for p in prices],
+                        "news_count": len(all_news),
+                        "calendar_count": len(calendar_items),
+                        "social_count": len(all_social),
+                    },
+                    "impact_score": impact_score,
+                    "sentiment": sentiment,
+                    "telegram_sent": sent,
+                    "telegram_sent_at": datetime.now(timezone.utc).isoformat() if sent else None,
+                }
+
+                # Store in DB with fallback if calendar constraint is not yet migrated in Supabase
                 try:
-                    supabase.table("alerts").insert({
-                        "user_id": user_id,
-                        "asset_symbol": ", ".join(alert_data.get("affected_assets", [])),
-                        "alert_type": alert_type,
-                        "severity": alert_data.get("severity", "info"),
-                        "title": alert_data.get("title", "Market Alert"),
-                        "body": alert_data.get("summary", ""),
-                        "ai_analysis": alert_data.get("summary", ""),
-                        "source_data": {
-                            "prices": [p.symbol for p in prices],
-                            "news_count": len(all_news),
-                            "calendar_count": len(calendar_items),
-                            "social_count": len(all_social),
-                        },
-                        "impact_score": alert_data.get("impact_score"),
-                        "sentiment": alert_data.get("sentiment"),
-                        "telegram_sent": sent,
-                        "telegram_sent_at": datetime.now(timezone.utc).isoformat() if sent else None,
-                    }).execute()
+                    supabase.table("alerts").insert(db_payload).execute()
                 except Exception as db_err:
-                    if "alerts_alert_type_check" in str(db_err):
-                        supabase.table("alerts").insert({
-                            "user_id": user_id,
-                            "asset_symbol": ", ".join(alert_data.get("affected_assets", [])),
-                            "alert_type": "composite",
-                            "severity": alert_data.get("severity", "info"),
-                            "title": alert_data.get("title", "Market Alert"),
-                            "body": alert_data.get("summary", ""),
-                            "ai_analysis": alert_data.get("summary", ""),
-                            "source_data": {
-                                "prices": [p.symbol for p in prices],
-                                "news_count": len(all_news),
-                                "calendar_count": len(calendar_items),
-                                "social_count": len(all_social),
-                            },
-                            "impact_score": alert_data.get("impact_score"),
-                            "sentiment": alert_data.get("sentiment"),
-                            "telegram_sent": sent,
-                            "telegram_sent_at": datetime.now(timezone.utc).isoformat() if sent else None,
-                        }).execute()
+                    err_msg = str(db_err)
+                    if "alerts_alert_type_check" in err_msg or "alerts_severity_check" in err_msg:
+                        # Fall back to guaranteed safe schema values
+                        db_payload["alert_type"] = "composite"
+                        db_payload["severity"] = "warning"
+                        try:
+                            supabase.table("alerts").insert(db_payload).execute()
+                        except Exception as retry_err:
+                            logger.error(f"Failed to store alert after fallback: {retry_err}")
                     else:
-                        raise db_err
+                        logger.error(f"Error storing alert in database: {db_err}")
 
             # Store news, calendar, and social items (deduplicate by URL)
             all_collected_feed_items = all_news + calendar_items + all_social
