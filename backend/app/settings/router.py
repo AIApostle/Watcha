@@ -79,6 +79,10 @@ async def update_settings(
             detail=f"Failed to update settings: {error_msg}",
         )
 
+    if "polling_interval" in updates:
+        from app.agent.worker import agent_worker
+        agent_worker.update_user_interval(user.id, updates["polling_interval"])
+
     return MessageResponse(message="Settings updated successfully.")
 
 

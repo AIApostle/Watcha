@@ -128,6 +128,34 @@ class AgentWorker:
         self._is_running = False
         logger.info("🛑 Agent worker stopped.")
 
+    def update_user_interval(self, user_id: str, new_interval: int) -> None:
+        """Dynamically update or create the scan schedule for a user."""
+        if not self._is_running:
+            return
+
+        job_id = f"scan_{user_id}"
+        try:
+            job = self._scheduler.get_job(job_id)
+            if job:
+                self._scheduler.reschedule_job(
+                    job_id,
+                    trigger="interval",
+                    minutes=new_interval,
+                )
+                logger.info(f"🔄 Rescheduled scan for user {user_id} to every {new_interval}min")
+            else:
+                self._scheduler.add_job(
+                    self._run_scan_cycle,
+                    "interval",
+                    minutes=new_interval,
+                    args=[user_id],
+                    id=job_id,
+                    replace_existing=True,
+                )
+                logger.info(f"➕ Added scan job for user {user_id} every {new_interval}min")
+        except Exception as e:
+            logger.error(f"Failed to update scan interval for user {user_id}: {e}")
+
     async def _run_scan_cycle(self, user_id: str) -> None:
         """
         Execute a single scan cycle for a user.
@@ -167,6 +195,24 @@ class AgentWorker:
             sensitivity = profile.get("alert_sensitivity", "medium")
             chat_id = profile.get("telegram_chat_id")
             telegram_verified = profile.get("telegram_verified", False)
+            polling_interval = profile.get("polling_interval", 15)
+
+            # Auto-align running scheduler job if user changed polling_interval in DB
+            job_id = f"scan_{user_id}"
+            if self._is_running:
+                try:
+                    job = self._scheduler.get_job(job_id)
+                    if job and hasattr(job.trigger, "interval"):
+                        curr_mins = int(job.trigger.interval.total_seconds() // 60)
+                        if curr_mins != polling_interval:
+                            logger.info(f"🔄 Auto-aligning job {job_id} from {curr_mins}m to {polling_interval}m")
+                            self._scheduler.reschedule_job(
+                                job_id,
+                                trigger="interval",
+                                minutes=polling_interval,
+                            )
+                except Exception as sync_err:
+                    logger.debug(f"Interval auto-sync notice: {sync_err}")
 
             # Fetch watched assets & entities
             assets_resp = (
