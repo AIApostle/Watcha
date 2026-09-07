@@ -792,8 +792,8 @@ h3 {
   }
 }
 
-/* ── Tablets & Mobile Devices (max-width: 768px) ───────────────────────────── */
-@media (max-width: 768px) {
+/* ── Tablets & Mobile Devices (max-width: 960px) ───────────────────────────── */
+@media (max-width: 960px) {
   .app-layout {
     flex-direction: column;
     min-height: 100vh;
@@ -813,12 +813,126 @@ h3 {
     padding: 0.75rem 1rem;
     position: sticky;
     top: 0;
-    z-index: 50;
-    background: rgba(17, 24, 39, 0.94);
+    z-index: 500;
+    background: rgba(17, 24, 39, 0.95);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-bottom: 1px solid var(--border-subtle);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  }
+
+  .mobile-hamburger-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    padding: 0.45rem;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+  }
+
+  .mobile-hamburger-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--accent-indigo);
+  }
+
+  /* Slide-out Mobile Drawer Overlay */
+  .mobile-drawer-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 10000;
+    display: flex;
+    animation: fadeIn 0.2s ease;
+  }
+
+  .mobile-drawer {
+    width: 290px;
+    max-width: 85vw;
+    height: 100%;
+    background: rgba(15, 23, 42, 0.98);
+    border-right: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    box-shadow: 8px 0 32px rgba(0, 0, 0, 0.6);
+    animation: slideInLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes slideInLeft {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  .mobile-drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 1rem;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .mobile-drawer-close {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.4rem;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mobile-drawer-close:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .mobile-drawer-nav {
+    padding: 1rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  .mobile-drawer-nav .nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.85rem 1rem;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+
+  .mobile-drawer-nav .nav-link:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .mobile-drawer-nav .nav-link.active {
+    color: white;
+    background: var(--gradient-primary);
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
+  }
+
+  .mobile-drawer-footer {
+    padding: 1rem;
+    border-top: 1px solid var(--border-subtle);
   }
 
   .mobile-header-logo {
@@ -871,29 +985,30 @@ h3 {
   /* Main Content: clear sidebar offset and add bottom padding for nav bar */
   .main-content {
     margin-left: 0 !important;
-    padding: 1rem 1rem 5.5rem 1rem !important;
+    padding: 1rem 1rem 6rem 1rem !important;
     min-height: calc(100vh - 54px);
     width: 100%;
     box-sizing: border-box;
     overflow-x: hidden;
   }
 
-  /* Mobile Bottom Navigation Bar */
+  /* Mobile Bottom Navigation Bar (pinned at bottom) */
   .mobile-bottom-nav {
-    display: flex;
+    display: flex !important;
     align-items: center;
     justify-content: space-around;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 50;
-    background: rgba(17, 24, 39, 0.94);
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    z-index: 9999 !important;
+    background: rgba(15, 23, 42, 0.96) !important;
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
     border-top: 1px solid var(--border-subtle);
-    padding: 0.45rem 0.4rem calc(0.45rem + env(safe-area-inset-bottom, 0px)) 0.4rem;
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+    padding: 0.45rem 0.4rem calc(0.45rem + env(safe-area-inset-bottom, 0px)) 0.4rem !important;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
   }
 
   .mobile-nav-item {

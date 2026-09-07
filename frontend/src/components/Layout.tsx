@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -7,6 +8,8 @@ import {
   Settings,
   LogOut,
   Eye,
+  Menu,
+  X,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 
@@ -20,6 +23,7 @@ const navItems = [
 
 export default function Layout() {
   const { user, logout } = useAuth();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const initials = user?.email
     ? user.email.substring(0, 2).toUpperCase()
@@ -29,12 +33,23 @@ export default function Layout() {
     <div className="app-layout">
       {/* Mobile Top Header (hidden on desktop) */}
       <header className="mobile-header">
-        <div className="mobile-header-logo">
-          <div className="logo-icon">
-            <Eye size={18} color="white" />
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <button
+            type="button"
+            className="mobile-hamburger-btn"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+          >
+            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+          <div className="mobile-header-logo">
+            <div className="logo-icon">
+              <Eye size={18} color="white" />
+            </div>
+            <span className="mobile-brand-name">Watcha</span>
           </div>
-          <span className="mobile-brand-name">Watcha</span>
         </div>
+
         <div className="mobile-user-action">
           <div className="user-avatar">{initials}</div>
           <button
@@ -47,6 +62,70 @@ export default function Layout() {
           </button>
         </div>
       </header>
+
+      {/* Slide-out Mobile Navigation Drawer */}
+      {mobileMenuOpen && (
+        <div
+          className="mobile-drawer-overlay"
+          onClick={() => setMobileMenuOpen(false)}
+        >
+          <aside
+            className="mobile-drawer"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mobile-drawer-header">
+              <div className="mobile-header-logo">
+                <div className="logo-icon">
+                  <Eye size={20} color="white" />
+                </div>
+                <span className="mobile-brand-name">Watcha</span>
+              </div>
+              <button
+                type="button"
+                className="mobile-drawer-close"
+                onClick={() => setMobileMenuOpen(false)}
+                aria-label="Close navigation"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <nav className="mobile-drawer-nav">
+              {navItems.map(({ to, icon: Icon, label }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={to === "/"}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={({ isActive }) =>
+                    `nav-link ${isActive ? "active" : ""}`
+                  }
+                >
+                  <Icon size={20} />
+                  <span>{label}</span>
+                </NavLink>
+              ))}
+            </nav>
+
+            <div className="mobile-drawer-footer">
+              <div
+                className="user-badge"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  logout();
+                }}
+                title="Sign out"
+              >
+                <div className="user-avatar">{initials}</div>
+                <div className="user-info">
+                  <div className="email">{user?.email}</div>
+                </div>
+                <LogOut size={16} color="var(--text-muted)" />
+              </div>
+            </div>
+          </aside>
+        </div>
+      )}
 
       {/* Desktop Sidebar (hidden on mobile) */}
       <aside className="sidebar">
@@ -89,7 +168,7 @@ export default function Layout() {
         <Outlet />
       </main>
 
-      {/* Mobile Bottom Navigation Bar (hidden on desktop) */}
+      {/* Mobile Bottom Navigation Bar (pinned at bottom of screen on mobile) */}
       <nav className="mobile-bottom-nav">
         {navItems.map(({ to, icon: Icon, label }) => (
           <NavLink

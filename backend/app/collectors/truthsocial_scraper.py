@@ -134,9 +134,14 @@ class TruthSocialScraper(BaseCollector):
                 )
 
                 if response.status_code != 200:
-                    logger.warning(
-                        f"Truth Social returned status {response.status_code}: {response.text[:100]}"
-                    )
+                    if response.status_code == 403:
+                        logger.debug(
+                            "Truth Social blocked by Cloudflare challenge (403), falling back to political RSS & web feeds."
+                        )
+                    else:
+                        logger.warning(
+                            f"Truth Social returned status {response.status_code}: {response.text[:100]}"
+                        )
                     return []
 
                 statuses: list[dict[str, Any]] = response.json()
