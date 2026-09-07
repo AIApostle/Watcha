@@ -83,10 +83,11 @@ class SocialMonitor(BaseCollector):
     def name(self) -> str:
         return "Political Monitor"
 
-    def _is_relevant(self, title: str, summary: str | None) -> bool:
+    def _is_relevant(self, title: str, summary: str | None, keywords: list[str] | None = None) -> bool:
         """Check if an article matches any of our keywords."""
+        kws = keywords if keywords is not None else self._keywords
         text = f"{title} {summary or ''}".lower()
-        return any(kw in text for kw in self._keywords)
+        return any(kw in text for kw in kws)
 
     async def collect(self, **kwargs) -> list[CollectedItem]:
         """
@@ -94,14 +95,21 @@ class SocialMonitor(BaseCollector):
 
         Keyword Args:
             max_per_feed: Max items per feed before filtering (default: 15)
+            max_age_hours: Max age of items in hours (default: 24)
             keywords: Override keywords for this call
+            extra_keywords: Additional entity keywords to match (e.g. watched people or orgs)
         """
         max_per_feed = kwargs.get("max_per_feed", 15)
+        max_age_hours = kwargs.get("max_age_hours", 24)
         keywords = kwargs.get("keywords")
-        if keywords:
-            self._keywords = [kw.lower() for kw in keywords]
+        extra_keywords = kwargs.get("extra_keywords") or []
+
+        active_keywords = [kw.lower() for kw in (keywords or self._keywords)]
+        if extra_keywords:
+            active_keywords = list(set(active_keywords + [k.lower().strip() for k in extra_keywords if k.strip()]))
 
         all_items: list[CollectedItem] = []
+        now = datetime.now(timezone.utc)
 
         for feed_name, feed_url in self._feeds.items():
             try:
@@ -125,10 +133,8 @@ class SocialMonitor(BaseCollector):
                         summary = re.sub(r"<[^>]+>", "", summary).strip()[:500]
 
                     # Only include relevant articles
-                    if not self._is_relevant(title, summary):
+                    if not self._is_relevant(title, summary, active_keywords):
                         continue
-
-                    self._seen_urls.add(url)
 
                     # Parse date
                     published_at = None
@@ -140,9 +146,17 @@ class SocialMonitor(BaseCollector):
                         except (ValueError, OverflowError):
                             pass
 
+                    # Filter out stale items older than max_age_hours
+                    if published_at:
+                        age_hours = (now - published_at).total_seconds() / 3600
+                        if age_hours > max_age_hours:
+                            continue
+
+                    self._seen_urls.add(url)
+
                     # Determine which keywords matched
                     text = f"{title} {summary}".lower()
-                    matched_keywords = [kw for kw in self._keywords if kw in text]
+                    matched_keywords = [kw for kw in active_keywords if kw in text]
 
                     all_items.append(
                         CollectedItem(
@@ -159,11 +173,16 @@ class SocialMonitor(BaseCollector):
                             },
                         )
                     )
-
             except Exception as e:
-                logger.error(f"Social monitor error for {feed_name}: {e}")
+                logger.error(f"Error parsing social feed {feed_name}: {e}")
 
-        logger.info(f"Social monitor: found {len(all_items)} relevant items")
+        # Sort by published_at descending (freshest first)
+        all_items.sort(
+            key=lambda x: x.published_at or datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
+        )
+
+        logger.info(f"Political Monitor: collected {len(all_items)} relevant items")
         return all_items
 
     def clear_seen(self):

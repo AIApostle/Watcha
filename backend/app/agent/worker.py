@@ -47,6 +47,8 @@ class AgentWorker:
         self._is_running = False
         self._last_run: datetime | None = None
         self._total_runs = 0
+        self._last_market_mood: str | None = None
+        self._last_mood_summary: str | None = None
 
     @property
     def is_running(self) -> bool:
@@ -59,6 +61,14 @@ class AgentWorker:
     @property
     def total_runs(self) -> int:
         return self._total_runs
+
+    @property
+    def last_market_mood(self) -> str | None:
+        return self._last_market_mood
+
+    @property
+    def last_mood_summary(self) -> str | None:
+        return self._last_mood_summary
 
     async def start(self) -> None:
         """Start the scheduler and schedule scan jobs for all active users."""
@@ -158,30 +168,43 @@ class AgentWorker:
             chat_id = profile.get("telegram_chat_id")
             telegram_verified = profile.get("telegram_verified", False)
 
-            # Fetch watched assets
+            # Fetch watched assets & entities
             assets_resp = (
                 supabase.table("watched_assets")
-                .select("asset_symbol")
+                .select("asset_symbol, asset_name")
                 .eq("user_id", user_id)
                 .eq("is_active", True)
                 .execute()
             )
-            asset_symbols = [a["asset_symbol"] for a in (assets_resp.data or [])]
-
-            if not asset_symbols:
-                logger.info(f"User {user_id} has no active assets, skipping.")
+            raw_assets = assets_resp.data or []
+            if not raw_assets:
+                logger.info(f"User {user_id} has no active assets or tracked entities, skipping.")
                 return
 
-            # ── Step 1: Collect prices ──
+            financial_assets = []
+            watched_people = []
+            watched_orgs = []
+
+            for a in raw_assets:
+                sym = a.get("asset_symbol", "")
+                name = a.get("asset_name") or sym
+                if sym.startswith("PERSON:"):
+                    watched_people.append(name.removeprefix("PERSON:").strip())
+                elif sym.startswith("ORG:"):
+                    watched_orgs.append(name.removeprefix("ORG:").strip())
+                else:
+                    financial_assets.append(sym)
+
+            # ── Step 1: Collect prices (for financial pairs) ──
             prices = []
-            for symbol in asset_symbols:
+            for symbol in financial_assets:
                 price = await self._finnhub.get_quote(symbol)
                 if price:
                     prices.append(price)
 
             # ── Step 2: Collect ForexFactory economic calendar ──
             watched_currencies = set()
-            for s in asset_symbols:
+            for s in financial_assets:
                 for part in s.replace("-", "/").split("/"):
                     if len(part) == 3:
                         watched_currencies.add(part.upper())
@@ -193,19 +216,44 @@ class AgentWorker:
                 limit=15,
             )
 
-            # ── Step 3: Collect financial news ──
-            query_terms = " ".join(
-                symbol.replace("/", " ") for symbol in asset_symbols[:3]
-            )
+            # ── Step 3: Collect financial news (latest 24 hours) ──
+            query_parts = [s.replace("/", " ") for s in financial_assets[:2]]
+            if watched_people:
+                query_parts.append(watched_people[0])
+            if watched_orgs:
+                query_parts.append(watched_orgs[0])
+            query_terms = " ".join(query_parts) if query_parts else "markets"
+
             news_items = await self._marketaux.collect(query=query_terms, limit=10)
-            rss_items = await self._rss.collect(max_per_feed=5)
+            rss_items = await self._rss.collect(max_per_feed=5, max_age_hours=24)
             all_news = news_items + rss_items
+
+            # Keep only items from the last 24h and sort freshest first
+            now_utc = datetime.now(timezone.utc)
+            all_news = [
+                n for n in all_news
+                if not n.published_at or (now_utc - n.published_at).total_seconds() <= 86400
+            ]
+            all_news.sort(
+                key=lambda x: x.published_at or datetime.min.replace(tzinfo=timezone.utc),
+                reverse=True,
+            )
 
             # ── Step 4: Collect social / political (Trump Truth, X, RSS) ──
             truth_items = await self._truthsocial.collect(limit=10)
             x_items = await self._x.collect(limit=10)
-            rss_social = await self._social.collect(max_per_feed=8)
+            extra_kws = watched_people + watched_orgs
+            rss_social = await self._social.collect(max_per_feed=8, max_age_hours=24, extra_keywords=extra_kws)
             all_social = truth_items + x_items + rss_social
+
+            all_social = [
+                s for s in all_social
+                if not s.published_at or (now_utc - s.published_at).total_seconds() <= 86400
+            ]
+            all_social.sort(
+                key=lambda x: x.published_at or datetime.min.replace(tzinfo=timezone.utc),
+                reverse=True,
+            )
 
             sources_checked = 6  # finnhub, forexfactory, marketaux, rss, truthsocial, x
             items_found = len(all_news) + len(calendar_items) + len(all_social)
@@ -216,9 +264,14 @@ class AgentWorker:
                 news_items=all_news,
                 social_items=all_social,
                 calendar_items=calendar_items,
-                user_assets=asset_symbols,
+                user_assets=financial_assets,
+                watched_people=watched_people,
+                watched_orgs=watched_orgs,
                 sensitivity=sensitivity,
             )
+
+            self._last_market_mood = analysis.get("market_mood", "neutral")
+            self._last_mood_summary = analysis.get("mood_summary", "")
 
             alerts = analysis.get("alerts", [])
             threshold = SENSITIVITY_THRESHOLDS.get(sensitivity, 4)
@@ -233,31 +286,61 @@ class AgentWorker:
 
             # ── Step 6: Store and dispatch alerts ──
             for alert_data in actionable_alerts:
-                # Store in DB
-                supabase.table("alerts").insert({
-                    "user_id": user_id,
-                    "asset_symbol": ", ".join(alert_data.get("affected_assets", [])),
-                    "alert_type": alert_data.get("alert_type", "composite"),
-                    "severity": alert_data.get("severity", "info"),
-                    "title": alert_data.get("title", "Market Alert"),
-                    "body": alert_data.get("summary", ""),
-                    "ai_analysis": alert_data.get("summary", ""),
-                    "source_data": {
-                        "prices": [p.symbol for p in prices],
-                        "news_count": len(all_news),
-                        "calendar_count": len(calendar_items),
-                        "social_count": len(all_social),
-                    },
-                    "impact_score": alert_data.get("impact_score"),
-                    "sentiment": alert_data.get("sentiment"),
-                    "telegram_sent": False,
-                }).execute()
+                alert_type = alert_data.get("alert_type", "composite")
+                if alert_type not in {"price_move", "news", "social", "calendar", "composite"}:
+                    alert_type = "composite"
 
                 # Send Telegram notification
+                sent = False
                 if chat_id and telegram_verified:
                     sent = await send_alert(chat_id, alert_data)
                     if sent:
                         alerts_generated += 1
+
+                # Store in DB with fallback if calendar constraint is not yet migrated
+                try:
+                    supabase.table("alerts").insert({
+                        "user_id": user_id,
+                        "asset_symbol": ", ".join(alert_data.get("affected_assets", [])),
+                        "alert_type": alert_type,
+                        "severity": alert_data.get("severity", "info"),
+                        "title": alert_data.get("title", "Market Alert"),
+                        "body": alert_data.get("summary", ""),
+                        "ai_analysis": alert_data.get("summary", ""),
+                        "source_data": {
+                            "prices": [p.symbol for p in prices],
+                            "news_count": len(all_news),
+                            "calendar_count": len(calendar_items),
+                            "social_count": len(all_social),
+                        },
+                        "impact_score": alert_data.get("impact_score"),
+                        "sentiment": alert_data.get("sentiment"),
+                        "telegram_sent": sent,
+                        "telegram_sent_at": datetime.now(timezone.utc).isoformat() if sent else None,
+                    }).execute()
+                except Exception as db_err:
+                    if "alerts_alert_type_check" in str(db_err):
+                        supabase.table("alerts").insert({
+                            "user_id": user_id,
+                            "asset_symbol": ", ".join(alert_data.get("affected_assets", [])),
+                            "alert_type": "composite",
+                            "severity": alert_data.get("severity", "info"),
+                            "title": alert_data.get("title", "Market Alert"),
+                            "body": alert_data.get("summary", ""),
+                            "ai_analysis": alert_data.get("summary", ""),
+                            "source_data": {
+                                "prices": [p.symbol for p in prices],
+                                "news_count": len(all_news),
+                                "calendar_count": len(calendar_items),
+                                "social_count": len(all_social),
+                            },
+                            "impact_score": alert_data.get("impact_score"),
+                            "sentiment": alert_data.get("sentiment"),
+                            "telegram_sent": sent,
+                            "telegram_sent_at": datetime.now(timezone.utc).isoformat() if sent else None,
+                        }).execute()
+                    else:
+                        raise db_err
 
             # Store news, calendar, and social items (deduplicate by URL)
             all_collected_feed_items = all_news + calendar_items + all_social
@@ -276,8 +359,27 @@ class AgentWorker:
                             },
                             on_conflict="url",
                         ).execute()
-                    except Exception:
-                        pass  # Ignore duplicate insert errors
+                    except Exception as e:
+                        err_str = str(e)
+                        # If DB constraint has not yet been altered to allow 'calendar', fallback to 'api'
+                        if "news_items_source_type_check" in err_str and item.source_type == "calendar":
+                            try:
+                                supabase.table("news_items").upsert(
+                                    {
+                                        "source": item.source,
+                                        "source_type": "api",
+                                        "title": item.title,
+                                        "url": item.url,
+                                        "summary": item.summary,
+                                        "sentiment_score": item.sentiment_score,
+                                        "published_at": item.published_at.isoformat() if item.published_at else None,
+                                    },
+                                    on_conflict="url",
+                                ).execute()
+                            except Exception:
+                                pass
+                        else:
+                            pass  # Ignore other duplicate/constraint errors
 
             # ── Step 7: Update run record ──
             self._last_run = datetime.now(timezone.utc)

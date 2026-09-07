@@ -44,25 +44,33 @@ class RSSCollector(BaseCollector):
 
         Keyword Args:
             max_per_feed: Max items per feed (default: 10)
+            max_age_hours: Max age of articles in hours (default: 24)
             feeds: Override feeds dict for this call
         """
         max_per_feed = kwargs.get("max_per_feed", 10)
+        max_age_hours = kwargs.get("max_age_hours", 24)
         feeds = kwargs.get("feeds", self._feeds)
 
         all_items: list[CollectedItem] = []
 
         for feed_name, feed_url in feeds.items():
             try:
-                items = await self._parse_feed(feed_name, feed_url, max_per_feed)
+                items = await self._parse_feed(feed_name, feed_url, max_per_feed, max_age_hours)
                 all_items.extend(items)
             except Exception as e:
                 logger.error(f"RSS error parsing {feed_name}: {e}")
+
+        # Sort by published_at descending (freshest first)
+        all_items.sort(
+            key=lambda x: x.published_at or datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
+        )
 
         logger.info(f"RSS: collected {len(all_items)} items from {len(feeds)} feeds")
         return all_items
 
     async def _parse_feed(
-        self, feed_name: str, feed_url: str, max_items: int
+        self, feed_name: str, feed_url: str, max_items: int, max_age_hours: int = 24
     ) -> list[CollectedItem]:
         """Parse a single RSS feed."""
         # feedparser is synchronous — it's fast enough for RSS
@@ -72,6 +80,7 @@ class RSSCollector(BaseCollector):
             logger.warning(f"RSS feed {feed_name} returned errors: {parsed.bozo_exception}")
             return []
 
+        now = datetime.now(timezone.utc)
         items = []
         for entry in parsed.entries[:max_items]:
             url = entry.get("link", "")
@@ -79,7 +88,6 @@ class RSSCollector(BaseCollector):
             # Deduplicate by URL
             if url in self._seen_urls:
                 continue
-            self._seen_urls.add(url)
 
             # Parse publish date
             published_at = None
@@ -90,6 +98,14 @@ class RSSCollector(BaseCollector):
                     )
                 except (ValueError, OverflowError):
                     pass
+
+            # Filter out stale news older than max_age_hours
+            if published_at:
+                age_hours = (now - published_at).total_seconds() / 3600
+                if age_hours > max_age_hours:
+                    continue
+
+            self._seen_urls.add(url)
 
             # Extract summary — strip HTML tags roughly
             summary = entry.get("summary", "")

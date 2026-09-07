@@ -87,7 +87,7 @@ async def update_settings(
 
 @router.get("/assets", response_model=list[WatchedAsset])
 async def list_assets(user: UserProfile = Depends(get_current_user)):
-    """List all watched assets for the current user."""
+    """List all watched assets, people, and organizations for the current user."""
     supabase = get_supabase_client()
     resp = (
         supabase.table("watched_assets")
@@ -96,7 +96,18 @@ async def list_assets(user: UserProfile = Depends(get_current_user)):
         .order("created_at", desc=False)
         .execute()
     )
-    return [WatchedAsset(**row) for row in ((resp.data if resp else []) or [])]
+    results = []
+    for row in ((resp.data if resp else []) or []):
+        sym = row.get("asset_symbol", "")
+        if "entity_type" not in row or not row.get("entity_type"):
+            if sym.startswith("PERSON:"):
+                row["entity_type"] = "person"
+            elif sym.startswith("ORG:"):
+                row["entity_type"] = "organization"
+            else:
+                row["entity_type"] = "asset"
+        results.append(WatchedAsset(**row))
+    return results
 
 
 @router.post("/assets", response_model=WatchedAsset, status_code=status.HTTP_201_CREATED)
@@ -104,22 +115,31 @@ async def add_asset(
     payload: AddAssetRequest,
     user: UserProfile = Depends(get_current_user),
 ):
-    """Add a new watched asset."""
+    """Add a new watched asset, person, or organization."""
     supabase = get_supabase_client()
+
+    symbol = payload.asset_symbol.strip()
+    name = payload.asset_name.strip()
+    entity_type = payload.entity_type or "asset"
+
+    if entity_type == "person" and not symbol.startswith("PERSON:"):
+        symbol = f"PERSON:{symbol}"
+    elif entity_type == "organization" and not symbol.startswith("ORG:"):
+        symbol = f"ORG:{symbol}"
 
     # Check for duplicate
     existing = (
         supabase.table("watched_assets")
         .select("id")
         .eq("user_id", user.id)
-        .eq("asset_symbol", payload.asset_symbol)
+        .eq("asset_symbol", symbol)
         .maybe_single()
         .execute()
     )
     if existing and existing.data:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Asset {payload.asset_symbol} is already in your watchlist.",
+            detail=f"'{name}' is already in your watchlist.",
         )
 
     resp = (
@@ -127,15 +147,17 @@ async def add_asset(
         .insert(
             {
                 "user_id": user.id,
-                "asset_symbol": payload.asset_symbol,
-                "asset_name": payload.asset_name,
+                "asset_symbol": symbol,
+                "asset_name": name,
                 "is_active": True,
             }
         )
         .execute()
     )
 
-    return WatchedAsset(**resp.data[0])
+    data = resp.data[0]
+    data["entity_type"] = entity_type
+    return WatchedAsset(**data)
 
 
 @router.delete("/assets/{asset_id}", response_model=MessageResponse)

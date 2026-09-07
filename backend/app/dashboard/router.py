@@ -41,6 +41,8 @@ async def get_dashboard(user: UserProfile = Depends(get_current_user)):
     # Fetch prices
     prices = []
     for symbol in asset_symbols:
+        if symbol.startswith("PERSON:") or symbol.startswith("ORG:"):
+            continue
         price = await _finnhub.get_quote(symbol)
         if price:
             prices.append(
@@ -82,11 +84,34 @@ async def get_dashboard(user: UserProfile = Depends(get_current_user)):
     )
     total_today = today_resp.count or 0
 
+    # Determine market mood from worker or latest alerts
+    mood = agent_worker.last_market_mood
+    mood_summary = agent_worker.last_mood_summary
+
+    if not mood:
+        latest_alert = (
+            supabase.table("alerts")
+            .select("sentiment, body")
+            .eq("user_id", user.id)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if latest_alert and latest_alert.data:
+            mood = latest_alert.data[0].get("sentiment")
+            mood_summary = latest_alert.data[0].get("body")
+        else:
+            mood = "neutral"
+            mood_summary = "Market conditions stable. No critical alerts detected."
+
     return DashboardResponse(
         prices=prices,
         recent_alerts=recent_alerts,
+        market_mood=mood,
+        mood_summary=mood_summary,
         agent_running=agent_worker.is_running,
         total_alerts_today=total_today,
+        watched_assets_count=len(asset_symbols),
     )
 
 
@@ -188,7 +213,10 @@ async def list_news(
     )
 
     if source_type:
-        query = query.eq("source_type", source_type)
+        if source_type == "calendar":
+            query = query.or_("source_type.eq.calendar,source.ilike.ForexFactory%")
+        else:
+            query = query.eq("source_type", source_type)
 
     resp = query.range(offset, offset + limit - 1).execute()
     return [NewsItemResponse(**n) for n in (resp.data or [])]

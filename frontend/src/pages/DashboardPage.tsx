@@ -74,7 +74,7 @@ export default function DashboardPage() {
         <div className="stat-card glass-card">
           <div className="stat-label">Watched Assets</div>
           <div className="stat-value" style={{ color: "var(--accent-indigo)" }}>
-            {data?.prices.length ?? 0}
+            {data?.watched_assets_count ?? data?.prices.length ?? 0}
           </div>
         </div>
 
@@ -88,14 +88,31 @@ export default function DashboardPage() {
                   ? "var(--accent-emerald)"
                   : data?.market_mood === "bearish"
                     ? "var(--accent-rose)"
-                    : "var(--text-secondary)",
+                    : data?.market_mood === "mixed"
+                      ? "var(--accent-amber)"
+                      : "var(--text-secondary)",
             }}
           >
             {data?.market_mood
               ? data.market_mood.charAt(0).toUpperCase() +
                 data.market_mood.slice(1)
-              : "—"}
+              : "Neutral"}
           </div>
+          {data?.mood_summary && (
+            <p
+              style={{
+                fontSize: "0.75rem",
+                color: "var(--text-secondary)",
+                marginTop: "0.4rem",
+                lineHeight: "1.3",
+                maxHeight: "3.2rem",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {data.mood_summary}
+            </p>
+          )}
         </div>
       </div>
 

@@ -20,8 +20,8 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 SYSTEM_PROMPT = """You are TheWatcher, an elite AI market intelligence analyst. Your job is to analyze 
 financial market data, macroeconomic calendar releases (ForexFactory), breaking financial news, 
-and political statements (especially Donald Trump's posts on Truth Social and X) to assess their 
-impact on specific watched assets.
+and political/institutional statements to assess their impact on specific watched assets, key leaders, 
+and organizations.
 
 You MUST respond with valid JSON matching this exact schema:
 {
@@ -30,9 +30,9 @@ You MUST respond with valid JSON matching this exact schema:
       "impact_score": <1-10 integer>,
       "sentiment": "<bullish|bearish|neutral>",
       "severity": "<critical|warning|info>",
-      "affected_assets": ["<SYMBOL/PAIR>"],
+      "affected_assets": ["<SYMBOL/PAIR or ENTITY>"],
       "title": "<short headline — max 80 chars>",
-      "summary": "<2-3 sentence analysis explaining WHY this matters for the asset>",
+      "summary": "<2-3 sentence analysis explaining WHY this matters for the asset/entity>",
       "alert_type": "<price_move|news|social|calendar|composite>"
     }
   ],
@@ -42,14 +42,16 @@ You MUST respond with valid JSON matching this exact schema:
 
 Key Analysis Rules:
 1. ForexFactory Economic Releases: Pay special attention to High/Medium impact events (NFP, CPI, interest rates, GDP, central bank decisions). Explain the directional impact on the affected currency or gold.
-2. Political Statements & Tariffs: Analyze Donald Trump's direct statements on Truth Social / X regarding tariffs, trade imbalances, currency wars (e.g. Dollar/CAD, USD/EUR, China), sanctions, or the Federal Reserve. Tariffs typically strengthen the USD short-term and drive safe-haven demand for Gold (XAU/USD).
-3. Severity and Impact Scoring:
+2. Watched People & Leaders (e.g. Donald Trump, Jerome Powell, Christine Lagarde, Elon Musk): Carefully inspect speeches, press conferences, Truth Social / X posts, or executive commentary. Directly correlate their words or actions to their market impact (e.g. Powell's interest rate stance, Trump's tariffs/trade rhetoric).
+3. Watched Organizations & Institutions (e.g. Federal Reserve, OPEC, ECB, SEC, US Treasury): Analyze official policy decisions, quota announcements, rate guidance, or regulatory actions. Explain how they affect commodities (Gold, Oil) and currency pairs.
+4. Freshness & Breaking News: Focus STRICTLY on breaking news and developments from the past 24 hours. Ignore stale historical context or already-digested news from previous cycles.
+5. Severity and Impact Scoring:
    - 1-3: Low impact — minor commentary, routine announcements
    - 4-6: Medium impact — notable calendar releases, policy hints, trade rhetoric
    - 7-8: High impact — major surprise in NFP/CPI, tariff threats/enactments, unexpected rate moves
    - 9-10: Critical — emergency rate decisions, severe trade sanctions, black swan events
 
-Only generate alerts for items that are genuinely relevant to the user's watched assets.
+Only generate alerts for items that are genuinely relevant to the user's watched assets, leaders, or organizations.
 If nothing significant is found, return {"alerts": [], "market_mood": "neutral", "mood_summary": "No significant market-moving events detected."}.
 """
 
@@ -61,6 +63,8 @@ async def analyze_market_data(
     user_assets: list[str],
     sensitivity: str = "medium",
     calendar_items: list[CollectedItem] | None = None,
+    watched_people: list[str] | None = None,
+    watched_orgs: list[str] | None = None,
 ) -> dict:
     """
     Send aggregated data to OpenRouter for AI analysis.
@@ -72,6 +76,8 @@ async def analyze_market_data(
         user_assets: List of asset symbols the user watches
         sensitivity: Alert sensitivity level (high/medium/low)
         calendar_items: Economic calendar events from ForexFactory
+        watched_people: Key people being monitored (e.g. Jerome Powell, Donald Trump)
+        watched_orgs: Organizations being monitored (e.g. Federal Reserve, OPEC)
 
     Returns:
         Parsed JSON response with alerts and market mood.
@@ -86,42 +92,60 @@ async def analyze_market_data(
         calendar_items=calendar_items or [],
         user_assets=user_assets,
         sensitivity=sensitivity,
+        watched_people=watched_people or [],
+        watched_orgs=watched_orgs or [],
     )
 
+    models_to_try = [settings.openrouter_model]
+    if "google/gemini-2.5-flash" not in models_to_try:
+        models_to_try.append("google/gemini-2.5-flash")
+    if "google/gemini-2.5-flash-lite" not in models_to_try:
+        models_to_try.append("google/gemini-2.5-flash-lite")
+
+    last_error = None
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                OPENROUTER_URL,
-                headers={
-                    "Authorization": f"Bearer {settings.openrouter_api_key}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://thewatcher.app",
-                    "X-Title": "TheWatcher Market Agent",
-                },
-                json={
-                    "model": settings.openrouter_model,
-                    "messages": [
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    "temperature": 0.3,
-                    "max_tokens": 2000,
-                    "response_format": {"type": "json_object"},
-                },
-            )
+            for model_name in models_to_try:
+                try:
+                    response = await client.post(
+                        OPENROUTER_URL,
+                        headers={
+                            "Authorization": f"Bearer {settings.openrouter_api_key}",
+                            "Content-Type": "application/json",
+                            "HTTP-Referer": "https://thewatcher.app",
+                            "X-Title": "TheWatcher Market Agent",
+                        },
+                        json={
+                            "model": model_name,
+                            "messages": [
+                                {"role": "system", "content": SYSTEM_PROMPT},
+                                {"role": "user", "content": user_prompt},
+                            ],
+                            "temperature": 0.3,
+                            "max_tokens": 2000,
+                            "response_format": {"type": "json_object"},
+                        },
+                    )
 
-            response.raise_for_status()
-            data = response.json()
+                    response.raise_for_status()
+                    data = response.json()
 
-            # Extract the assistant's message content
-            content = data["choices"][0]["message"]["content"]
-            result = json.loads(content)
+                    # Extract the assistant's message content
+                    content = data["choices"][0]["message"]["content"]
+                    result = json.loads(content)
 
-            logger.info(
-                f"AI Analysis: {len(result.get('alerts', []))} alerts, "
-                f"mood={result.get('market_mood', 'unknown')}"
-            )
-            return result
+                    logger.info(
+                        f"AI Analysis using {model_name}: {len(result.get('alerts', []))} alerts, "
+                        f"mood={result.get('market_mood', 'unknown')}"
+                    )
+                    return result
+                except httpx.HTTPStatusError as err:
+                    last_error = err
+                    logger.warning(f"OpenRouter model {model_name} failed: {err.response.status_code} {err.response.text}")
+                    continue
+
+        if last_error:
+            raise last_error
 
     except json.JSONDecodeError as e:
         logger.error(f"AI response was not valid JSON: {e}")
@@ -141,16 +165,23 @@ def _build_prompt(
     calendar_items: list[CollectedItem],
     user_assets: list[str],
     sensitivity: str,
+    watched_people: list[str] | None = None,
+    watched_orgs: list[str] | None = None,
 ) -> str:
     """Construct the analysis prompt from collected data."""
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
     parts = [
         f"## Analysis Request — {now}",
-        f"**User's Watched Assets:** {', '.join(user_assets)}",
         f"**Alert Sensitivity:** {sensitivity} (generate {'all' if sensitivity == 'high' else 'significant' if sensitivity == 'medium' else 'only critical'} alerts)",
-        "",
     ]
+    if user_assets:
+        parts.append(f"**User's Watched Assets:** {', '.join(user_assets)}")
+    if watched_people:
+        parts.append(f"**Watched Key People / Leaders:** {', '.join(watched_people)}")
+    if watched_orgs:
+        parts.append(f"**Watched Organizations / Institutions:** {', '.join(watched_orgs)}")
+    parts.append("")
 
     # Price data
     if prices:
@@ -174,20 +205,21 @@ def _build_prompt(
 
     # News items (batched to save tokens)
     if news_items:
-        parts.append(f"## Financial News ({len(news_items)} items)")
+        parts.append(f"## Latest Financial News ({len(news_items)} items)")
         for i, item in enumerate(news_items[:12], 1):  # Cap at 12
-            pub = item.published_at.strftime("%H:%M") if item.published_at else "?"
+            pub = item.published_at.strftime("%m/%d %H:%M UTC") if item.published_at else "Recent"
             summary_str = f" — {item.summary[:140]}" if item.summary else ""
             parts.append(f"{i}. [{item.source}] {item.title}{summary_str} ({pub})")
         parts.append("")
 
     # Social / political items (Truth Social + X + Political feeds)
     if social_items:
-        parts.append(f"## Political Statements & Social Posts ({len(social_items)} items)")
+        parts.append(f"## Recent Political Statements & Social Posts ({len(social_items)} items)")
         for i, item in enumerate(social_items[:12], 1):  # Cap at 12
             keywords = item.raw_data.get("matched_keywords", [])
             kw_str = f" [keywords: {', '.join(keywords)}]" if keywords else ""
-            parts.append(f"{i}. [{item.source}] {item.title}{kw_str}")
+            pub = item.published_at.strftime("%m/%d %H:%M UTC") if item.published_at else "Recent"
+            parts.append(f"{i}. [{item.source}] {item.title}{kw_str} ({pub})")
             if item.summary:
                 parts.append(f"   > {item.summary[:200]}")
         parts.append("")

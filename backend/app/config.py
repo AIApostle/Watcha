@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     # --- OpenRouter ---
     openrouter_api_key: str = Field(..., description="OpenRouter API key")
     openrouter_model: str = Field(
-        default="google/gemini-2.0-flash",
+        default="google/gemini-2.5-flash",
         description="Default OpenRouter model for AI analysis",
     )
 

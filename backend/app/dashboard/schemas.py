@@ -50,3 +50,4 @@ class DashboardResponse(BaseModel):
     mood_summary: str | None = None
     agent_running: bool = False
     total_alerts_today: int = 0
+    watched_assets_count: int = 0

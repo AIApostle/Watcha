@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS alerts (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id         UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
     asset_symbol    TEXT,
-    alert_type      TEXT NOT NULL CHECK (alert_type IN ('price_move', 'news', 'social', 'composite')),
+    alert_type      TEXT NOT NULL CHECK (alert_type IN ('price_move', 'news', 'social', 'calendar', 'composite')),
     severity        TEXT NOT NULL CHECK (severity IN ('critical', 'warning', 'info')),
     title           TEXT NOT NULL,
     body            TEXT,
@@ -130,7 +130,7 @@ CREATE POLICY "Service role can manage all alerts"
 CREATE TABLE IF NOT EXISTS news_items (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     source          TEXT NOT NULL,
-    source_type     TEXT NOT NULL CHECK (source_type IN ('rss', 'api', 'social')),
+    source_type     TEXT NOT NULL CHECK (source_type IN ('rss', 'api', 'social', 'calendar')),
     title           TEXT NOT NULL,
     url             TEXT,
     summary         TEXT,

@@ -23,6 +23,7 @@ export interface WatchedAsset {
   user_id: string;
   asset_symbol: string;
   asset_name: string;
+  entity_type?: "asset" | "person" | "organization";
   is_active: boolean;
   created_at: string;
 }
@@ -93,4 +94,5 @@ export interface DashboardData {
   mood_summary: string | null;
   agent_running: boolean;
   total_alerts_today: number;
+  watched_assets_count?: number;
 }

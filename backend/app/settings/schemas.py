@@ -13,8 +13,9 @@ class UpdateSettingsRequest(BaseModel):
 class WatchedAsset(BaseModel):
     id: str | None = None
     user_id: str | None = None
-    asset_symbol: str  # e.g. "XAU/USD"
-    asset_name: str  # e.g. "Gold / US Dollar"
+    asset_symbol: str  # e.g. "XAU/USD", "PERSON:Jerome Powell", "ORG:Federal Reserve"
+    asset_name: str  # e.g. "Gold / US Dollar", "Jerome Powell", "Federal Reserve"
+    entity_type: str = "asset"  # asset, person, organization
     is_active: bool = True
     created_at: datetime | None = None
 
@@ -22,6 +23,7 @@ class WatchedAsset(BaseModel):
 class AddAssetRequest(BaseModel):
     asset_symbol: str
     asset_name: str
+    entity_type: str = "asset"  # asset, person, organization
 
 
 class TelegramVerifyResponse(BaseModel):

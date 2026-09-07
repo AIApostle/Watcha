@@ -88,8 +88,112 @@ class FinnhubCollector(BaseCollector):
                 else datetime.now(timezone.utc),
             )
         except Exception as e:
-            logger.error(f"Finnhub quote error for {symbol}: {e}")
-            return None
+            logger.warning(f"Finnhub quote unavailable for {symbol} ({e}), using live fallback quotes.")
+            return await self._fallback_quote(symbol)
+
+    async def _fallback_quote(self, symbol: str) -> PriceData | None:
+        """Fetch fallback market price from free public APIs if Finnhub key is invalid."""
+        try:
+            # Crypto fallback via Binance
+            if symbol in ("BTC/USD", "ETH/USD"):
+                pair = symbol.replace("/", "").replace("USD", "USDT")
+                resp = await self._client.get(
+                    f"https://api.binance.com/api/v3/ticker/24hr?symbol={pair}",
+                    timeout=5.0,
+                )
+                if resp.status_code == 200:
+                    d = resp.json()
+                    curr = float(d.get("lastPrice", 0))
+                    prev = float(d.get("prevClosePrice", 0))
+                    chg = float(d.get("priceChange", 0))
+                    pct = float(d.get("priceChangePercent", 0))
+                    return PriceData(
+                        symbol=symbol,
+                        current_price=curr,
+                        previous_close=prev,
+                        change=chg,
+                        change_percent=pct,
+                        timestamp=datetime.now(timezone.utc),
+                    )
+
+            # Forex & Commodities fallback via Open Exchange Rates
+            resp = await self._client.get(
+                "https://open.er-api.com/v6/latest/USD",
+                timeout=5.0,
+            )
+            if resp.status_code == 200:
+                rates = resp.json().get("rates", {})
+                curr = None
+                if symbol == "EUR/USD" and rates.get("EUR"):
+                    curr = round(1.0 / rates["EUR"], 4)
+                elif symbol == "GBP/USD" and rates.get("GBP"):
+                    curr = round(1.0 / rates["GBP"], 4)
+                elif symbol == "AUD/USD" and rates.get("AUD"):
+                    curr = round(1.0 / rates["AUD"], 4)
+                elif symbol == "USD/JPY" and rates.get("JPY"):
+                    curr = round(rates["JPY"], 3)
+                elif symbol == "USD/CAD" and rates.get("CAD"):
+                    curr = round(rates["CAD"], 4)
+                elif symbol == "USD/CHF" and rates.get("CHF"):
+                    curr = round(rates["CHF"], 4)
+                # Commodities: Gold & Silver via live Yahoo Finance or Binance PAXG
+                elif symbol in ("XAU/USD", "XAG/USD"):
+                    metal_ticker = "GC=F" if symbol == "XAU/USD" else "SI=F"
+                    try:
+                        y_resp = await self._client.get(
+                            f"https://query1.finance.yahoo.com/v8/finance/chart/{metal_ticker}?interval=1d",
+                            headers={"User-Agent": "Mozilla/5.0"},
+                            timeout=5.0,
+                        )
+                        if y_resp.status_code == 200:
+                            meta = y_resp.json()["chart"]["result"][0]["meta"]
+                            curr_val = float(meta["regularMarketPrice"])
+                            prev_val = float(meta.get("previousClose") or meta.get("chartPreviousClose") or curr_val)
+                            change_val = round(curr_val - prev_val, 2)
+                            pct_val = round((change_val / prev_val) * 100, 2) if prev_val else 0.0
+                            return PriceData(
+                                symbol=symbol,
+                                current_price=curr_val,
+                                previous_close=prev_val,
+                                change=change_val,
+                                change_percent=pct_val,
+                                timestamp=datetime.now(timezone.utc),
+                            )
+                    except Exception as y_err:
+                        logger.warning(f"Yahoo price fetch failed for {symbol}: {y_err}")
+
+                    # Secondary fallback for Gold via Binance PAXG (backed 1:1 by physical gold)
+                    if symbol == "XAU/USD":
+                        try:
+                            b_resp = await self._client.get(
+                                "https://api.binance.com/api/v3/ticker/24hr?symbol=PAXGUSDT",
+                                timeout=5.0,
+                            )
+                            if b_resp.status_code == 200:
+                                d = b_resp.json()
+                                return PriceData(
+                                    symbol=symbol,
+                                    current_price=float(d.get("lastPrice", 0)),
+                                    previous_close=float(d.get("prevClosePrice", 0)),
+                                    change=float(d.get("priceChange", 0)),
+                                    change_percent=float(d.get("priceChangePercent", 0)),
+                                    timestamp=datetime.now(timezone.utc),
+                                )
+                        except Exception as b_err:
+                            logger.warning(f"Binance PAXG fallback failed: {b_err}")
+
+                if curr is not None:
+                    return PriceData(
+                        symbol=symbol,
+                        current_price=curr,
+                        change=0.0,
+                        change_percent=0.0,
+                        timestamp=datetime.now(timezone.utc),
+                    )
+        except Exception as err:
+            logger.error(f"Fallback price error for {symbol}: {err}")
+
+        return None
 
     async def collect(self, **kwargs) -> list[CollectedItem]:
         """Fetch general market news from Finnhub."""

@@ -147,12 +147,18 @@ class ForexFactoryCollector(BaseCollector):
                     matched = [kw for kw in HIGH_IMPACT_KEYWORDS if kw in combined]
                     impact = "High" if matched else "Medium"
 
+                    # Ensure fallback link is unique
+                    unique_link = link
+                    if not link or link == "https://www.forexfactory.com/calendar":
+                        slug = title.lower().replace(" ", "-")[:40]
+                        unique_link = f"https://www.forexfactory.com/calendar#{feed_name.lower().replace(' ', '-')}-{slug}"
+
                     fallback_items.append(
                         CollectedItem(
                             source=f"ForexFactory ({feed_name})",
                             source_type="calendar",
                             title=f"[{impact} Impact] {title}",
-                            url=link,
+                            url=unique_link,
                             summary=summary or title,
                             published_at=datetime.now(timezone.utc),
                             raw_data={
@@ -225,12 +231,22 @@ class ForexFactoryCollector(BaseCollector):
                     f"Forecast: {forecast}. Previous: {previous}."
                 )
 
+                # Generate a unique URL for each calendar event so it doesn't collide on UNIQUE(url)
+                event_slug = title.lower().replace(" ", "-").replace("/", "-")
+                event_date = raw_date or (dt.strftime("%Y-%m-%d") if dt else "thisweek")
+                raw_url = event.get("url")
+                unique_url = (
+                    raw_url
+                    if (raw_url and raw_url != "https://www.forexfactory.com/calendar")
+                    else f"https://www.forexfactory.com/calendar#{country}-{event_slug}-{event_date}"
+                )
+
                 items.append(
                     CollectedItem(
                         source="ForexFactory",
                         source_type="calendar",
                         title=display_title,
-                        url=event.get("url") or "https://www.forexfactory.com/calendar",
+                        url=unique_url,
                         summary=summary,
                         published_at=dt or datetime.now(timezone.utc),
                         raw_data=event,
