@@ -1,5 +1,5 @@
 """
-TheWatcher — FastAPI Application Entry Point.
+Watcha — FastAPI Application Entry Point.
 
 Configures the FastAPI app with CORS, lifespan management,
 and mounts all API routers.
@@ -37,10 +37,10 @@ def _register_routers(app: FastAPI) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle."""
-    logger.info("🚀 TheWatcher starting up…")
+    logger.info("🚀 Watcha starting up…")
     # Agent worker auto-start could go here in the future
     yield
-    logger.info("🛑 TheWatcher shutting down…")
+    logger.info("🛑 Watcha shutting down…")
     # Cleanup: stop APScheduler if running
     from app.agent.worker import agent_worker
 

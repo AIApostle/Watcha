@@ -276,19 +276,20 @@ export default function SettingsPage() {
 
         <div className="form-group">
           <label className="form-label">Telegram Chat ID</label>
-          <div style={{ display: "flex", gap: "0.75rem" }}>
+          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
             <input
               className="form-input"
               type="text"
               placeholder="e.g. 123456789"
               value={chatId}
               onChange={(e) => setChatId(e.target.value)}
-              style={{ flex: 1 }}
+              style={{ flex: "1 1 200px", minWidth: 0 }}
             />
             <button
               className="btn btn-secondary"
               onClick={handleVerifyTelegram}
               disabled={verifyLoading || !chatId}
+              style={{ flexShrink: 0 }}
             >
               <Send size={16} />
               {verifyLoading ? "Sending…" : "Verify"}
@@ -491,7 +492,7 @@ export default function SettingsPage() {
                 className="form-select"
                 value={customCategory}
                 onChange={(e) => setCustomCategory(e.target.value as any)}
-                style={{ width: "160px" }}
+                style={{ flex: "1 1 140px", minWidth: 0 }}
               >
                 <option value="person">👤 Person / Leader</option>
                 <option value="organization">🏛️ Organization</option>
@@ -501,28 +502,29 @@ export default function SettingsPage() {
               <input
                 className="form-input"
                 type="text"
-                placeholder="e.g. Bank of England, Jensen Huang, NVIDIA, OPEC..."
+                placeholder="e.g. Bank of England, Jensen Huang, OPEC..."
                 value={customName}
                 onChange={(e) => setCustomName(e.target.value)}
-                style={{ flex: 1, minWidth: "220px" }}
+                style={{ flex: "2 1 180px", minWidth: 0 }}
               />
 
               <button
                 className="btn btn-primary"
                 onClick={handleAddCustom}
                 disabled={!customName.trim() || addingAsset}
+                style={{ flexShrink: 0, whiteSpace: "nowrap" }}
               >
                 <Plus size={16} />
                 {addingAsset ? "Adding…" : "Add Custom"}
               </button>
             </div>
           ) : (
-            <div style={{ display: "flex", gap: "0.6rem" }}>
+            <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
               <select
                 className="form-select"
                 value={selectedPreset}
                 onChange={(e) => setSelectedPreset(e.target.value)}
-                style={{ flex: 1 }}
+                style={{ flex: "1 1 240px", minWidth: 0 }}
               >
                 <option value="">
                   {availablePresets.length > 0
@@ -541,6 +543,7 @@ export default function SettingsPage() {
                 className="btn btn-primary"
                 onClick={handleAddPreset}
                 disabled={!selectedPreset || addingAsset}
+                style={{ flexShrink: 0, whiteSpace: "nowrap" }}
               >
                 <Plus size={16} />
                 {addingAsset ? "Adding…" : "Add Target"}

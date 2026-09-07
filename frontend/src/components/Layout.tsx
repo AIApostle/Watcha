@@ -13,7 +13,7 @@ import { useAuth } from "../hooks/useAuth";
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/alerts", icon: Bell, label: "Alerts" },
-  { to: "/news", icon: Newspaper, label: "News Feed" },
+  { to: "/news", icon: Newspaper, label: "News" },
   { to: "/agent", icon: Bot, label: "Agent" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
@@ -27,13 +27,34 @@ export default function Layout() {
 
   return (
     <div className="app-layout">
-      {/* Sidebar */}
+      {/* Mobile Top Header (hidden on desktop) */}
+      <header className="mobile-header">
+        <div className="mobile-header-logo">
+          <div className="logo-icon">
+            <Eye size={18} color="white" />
+          </div>
+          <span className="mobile-brand-name">Watcha</span>
+        </div>
+        <div className="mobile-user-action">
+          <div className="user-avatar">{initials}</div>
+          <button
+            onClick={logout}
+            className="mobile-logout-btn"
+            title="Sign out"
+            aria-label="Logout"
+          >
+            <LogOut size={16} />
+          </button>
+        </div>
+      </header>
+
+      {/* Desktop Sidebar (hidden on mobile) */}
       <aside className="sidebar">
         <div className="sidebar-logo">
           <div className="logo-icon">
             <Eye size={20} color="white" />
           </div>
-          <h1>TheWatcher</h1>
+          <h1>Watcha</h1>
         </div>
 
         <nav className="sidebar-nav">
@@ -67,6 +88,23 @@ export default function Layout() {
       <main className="main-content">
         <Outlet />
       </main>
+
+      {/* Mobile Bottom Navigation Bar (hidden on desktop) */}
+      <nav className="mobile-bottom-nav">
+        {navItems.map(({ to, icon: Icon, label }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={to === "/"}
+            className={({ isActive }) =>
+              `mobile-nav-item ${isActive ? "active" : ""}`
+            }
+          >
+            <Icon size={20} />
+            <span>{label}</span>
+          </NavLink>
+        ))}
+      </nav>
     </div>
   );
 }

@@ -764,23 +764,288 @@ h3 {
   }
 }
 
-/* ── Responsive ──────────────────────────────────────────────────────────── */
-@media (max-width: 768px) {
-  .sidebar {
-    display: none;
-  }
+/* ── Mobile Navigation Controls (Hidden by default on Desktop) ─────────────── */
+.mobile-header {
+  display: none;
+}
 
-  .main-content {
-    margin-left: 0;
-    padding: 1rem;
-  }
+.mobile-bottom-nav {
+  display: none;
+}
 
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Tablet & Small Laptops (max-width: 1024px) ────────────────────────────── */
+@media (max-width: 1024px) {
   .cards-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1rem;
   }
 
   .stats-row {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+}
+
+/* ── Tablets & Mobile Devices (max-width: 768px) ───────────────────────────── */
+@media (max-width: 768px) {
+  .app-layout {
+    flex-direction: column;
+    min-height: 100vh;
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  .sidebar {
+    display: none !important;
+  }
+
+  /* Mobile Sticky Top Header */
+  .mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: rgba(17, 24, 39, 0.94);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border-subtle);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  }
+
+  .mobile-header-logo {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .mobile-brand-name {
+    font-size: 1.2rem;
+    font-weight: 700;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.02em;
+  }
+
+  .mobile-user-action {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+  }
+
+  .mobile-user-action .user-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 0.75rem;
+  }
+
+  .mobile-logout-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    padding: 0.4rem 0.55rem;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+  }
+
+  .mobile-logout-btn:hover {
+    color: var(--accent-rose);
+    border-color: rgba(251, 113, 133, 0.3);
+    background: rgba(251, 113, 133, 0.1);
+  }
+
+  /* Main Content: clear sidebar offset and add bottom padding for nav bar */
+  .main-content {
+    margin-left: 0 !important;
+    padding: 1rem 1rem 5.5rem 1rem !important;
+    min-height: calc(100vh - 54px);
+    width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+
+  /* Mobile Bottom Navigation Bar */
+  .mobile-bottom-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    background: rgba(17, 24, 39, 0.94);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-top: 1px solid var(--border-subtle);
+    padding: 0.45rem 0.4rem calc(0.45rem + env(safe-area-inset-bottom, 0px)) 0.4rem;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+  }
+
+  .mobile-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.68rem;
+    font-weight: 500;
+    padding: 0.35rem 0.5rem;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    flex: 1;
+    max-width: 68px;
+  }
+
+  .mobile-nav-item:hover {
+    color: var(--text-primary);
+  }
+
+  .mobile-nav-item.active {
+    color: var(--accent-indigo);
+    background: rgba(99, 102, 241, 0.12);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+  }
+
+  .mobile-nav-item svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Typography & Components on Mobile */
+  .page-header {
+    margin-bottom: 1.25rem;
+  }
+
+  .page-header h1 {
+    font-size: 1.45rem;
+  }
+
+  .page-header p {
+    font-size: 0.85rem;
+  }
+
+  .stats-row {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.75rem !important;
+    margin-bottom: 1.25rem !important;
+  }
+
+  .stat-card {
+    padding: 0.85rem 1rem !important;
+  }
+
+  .stat-card .stat-value {
+    font-size: 1.3rem !important;
+  }
+
+  .cards-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem !important;
+  }
+
+  .price-card {
+    padding: 1rem !important;
+  }
+
+  .price-card .price {
+    font-size: 1.5rem !important;
+  }
+
+  .glass-card {
+    border-radius: 12px !important;
+  }
+
+  .news-card {
+    flex-direction: column !important;
+    gap: 0.6rem !important;
+    padding: 1rem !important;
+  }
+
+  .alert-card {
+    padding: 1rem !important;
+  }
+
+  .filters-bar {
+    overflow-x: auto;
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.4rem;
+    scrollbar-width: none;
+  }
+
+  .filters-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .filters-bar button {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .auth-page {
+    padding: 1rem !important;
+  }
+
+  .auth-card {
+    padding: 1.75rem 1.25rem !important;
+    max-width: 100% !important;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 0.6rem 0.75rem !important;
+    white-space: nowrap;
+  }
+}
+
+/* ── Compact Mobile Screens (max-width: 480px) ─────────────────────────────── */
+@media (max-width: 480px) {
+  .main-content {
+    padding: 0.75rem 0.75rem 5.5rem 0.75rem !important;
+  }
+
+  .page-header h1 {
+    font-size: 1.35rem;
+  }
+
+  .stats-row {
+    grid-template-columns: 1fr !important;
+    gap: 0.6rem !important;
+  }
+
+  .stat-card {
+    padding: 0.75rem 0.9rem !important;
+  }
+
+  .stat-card .stat-value {
+    font-size: 1.2rem !important;
+  }
+
+  .mobile-bottom-nav {
+    padding-left: 0.2rem;
+    padding-right: 0.2rem;
+  }
+
+  .mobile-nav-item {
+    font-size: 0.62rem;
+    padding: 0.3rem 0.25rem;
   }
 }
 

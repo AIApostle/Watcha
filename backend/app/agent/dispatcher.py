@@ -125,8 +125,8 @@ async def send_test_message(chat_id: str) -> bool:
         await bot.send_message(
             chat_id=chat_id,
             text=(
-                "✅ <b>TheWatcher Connected!</b>\n\n"
-                "Your Telegram is now linked to TheWatcher.\n"
+                "✅ <b>Watcha Connected!</b>\n\n"
+                "Your Telegram is now linked to Watcha.\n"
                 "You'll receive market alerts here when the agent detects "
                 "significant events affecting your watched assets.\n\n"
                 "🤖 <i>Stay sharp. Stay informed.</i>"

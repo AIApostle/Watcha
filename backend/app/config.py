@@ -1,4 +1,4 @@
-"""TheWatcher backend application configuration."""
+"""Watcha backend application configuration."""
 
 from pydantic_settings import BaseSettings
 from pydantic import Field
@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # --- App ---
-    app_name: str = "TheWatcher"
+    app_name: str = "Watcha"
     debug: bool = False
     cors_origins: str = "http://localhost:5173"
 

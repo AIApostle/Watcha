@@ -1,7 +1,7 @@
 [project]
-name = "thewatcher-backend"
+name = "watcha-backend"
 version = "0.1.0"
-description = "TheWatcher — AI-powered market intelligence agent backend"
+description = "Watcha — AI-powered market intelligence agent backend"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

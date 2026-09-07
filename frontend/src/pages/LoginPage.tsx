@@ -44,7 +44,7 @@ export default function LoginPage() {
         </div>
         <h1>Welcome back</h1>
         <p className="subtitle">
-          Sign in to TheWatcher to monitor your markets.
+          Sign in to Watcha to monitor your markets.
         </p>
 
         {error && <div className="auth-error">{error}</div>}

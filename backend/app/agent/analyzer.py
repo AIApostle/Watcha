@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-SYSTEM_PROMPT = """You are TheWatcher, an elite AI market intelligence analyst. Your job is to analyze 
+SYSTEM_PROMPT = """You are Watcha, an elite AI market intelligence analyst. Your job is to analyze 
 financial market data, macroeconomic calendar releases (ForexFactory), breaking financial news, 
 and political/institutional statements to assess their impact on specific watched assets, key leaders, 
 and organizations.
@@ -112,8 +112,8 @@ async def analyze_market_data(
                         headers={
                             "Authorization": f"Bearer {settings.openrouter_api_key}",
                             "Content-Type": "application/json",
-                            "HTTP-Referer": "https://thewatcher.app",
-                            "X-Title": "TheWatcher Market Agent",
+                            "HTTP-Referer": "https://watcha.app",
+                            "X-Title": "Watcha Market Agent",
                         },
                         json={
                             "model": model_name,

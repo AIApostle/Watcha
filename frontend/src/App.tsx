@@ -17,7 +17,7 @@ function AppRoutes() {
     return (
       <div className="loading-screen">
         <div className="loading-spinner" />
-        <p>Loading TheWatcher…</p>
+        <p>Loading Watcha…</p>
       </div>
     );
   }
