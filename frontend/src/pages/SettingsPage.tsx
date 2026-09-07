@@ -9,10 +9,18 @@ import {
   Coins,
   User,
   Building2,
+  Server,
+  RefreshCw,
 } from "lucide-react";
 import api from "../lib/api";
 import { useAuth } from "../hooks/useAuth";
 import type { WatchedAsset } from "../lib/types";
+import {
+  getApiBaseUrl,
+  setCustomApiUrl,
+  resetApiUrl,
+  DEFAULT_PROD_API_URL,
+} from "../lib/apiConfig";
 
 interface WatchablePreset {
   symbol: string;
@@ -144,6 +152,53 @@ export default function SettingsPage() {
     } finally {
       setVerifyLoading(false);
     }
+  };
+
+  // Backend API URL Configuration
+  const [backendUrl, setBackendUrl] = useState(getApiBaseUrl());
+  const [apiTesting, setApiTesting] = useState(false);
+  const [apiStatus, setApiStatus] = useState<"connected" | "disconnected" | "checking">("checking");
+  const [apiMessage, setApiMessage] = useState("");
+
+  const checkApiHealth = async (urlToCheck?: string) => {
+    const target = (urlToCheck !== undefined ? urlToCheck : backendUrl).trim().replace(/\/+$/, "");
+    if (!target) return;
+    setApiTesting(true);
+    setApiStatus("checking");
+    setApiMessage("");
+    try {
+      const resp = await fetch(`${target}/api/health`, { method: "GET" });
+      if (resp.ok) {
+        const data = await resp.json();
+        setApiStatus("connected");
+        setApiMessage(`Active & operational (${data.service || "Watcha"})`);
+      } else {
+        setApiStatus("disconnected");
+        setApiMessage(`Server returned status HTTP ${resp.status}`);
+      }
+    } catch {
+      setApiStatus("disconnected");
+      setApiMessage("Cannot reach backend. If hosted on Render Free tier, it may take 30-50s to wake from sleep.");
+    } finally {
+      setApiTesting(false);
+    }
+  };
+
+  useEffect(() => {
+    checkApiHealth(getApiBaseUrl());
+  }, []);
+
+  const handleSaveBackendUrl = async (e: FormEvent) => {
+    e.preventDefault();
+    setCustomApiUrl(backendUrl);
+    await checkApiHealth(backendUrl);
+  };
+
+  const handleResetBackendUrl = async () => {
+    resetApiUrl();
+    const defaultUrl = getApiBaseUrl();
+    setBackendUrl(defaultUrl);
+    await checkApiHealth(defaultUrl);
   };
 
   // Add Preset Item (Asset, Person, or Organization)
@@ -613,6 +668,129 @@ export default function SettingsPage() {
               }}
             >
               {settingsMessage}
+            </p>
+          )}
+        </form>
+      </div>
+
+      {/* ── Backend Server Connection ─────────────────────────────── */}
+      <div className="glass-card" style={{ padding: "1.5rem", marginBottom: "2rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
+          <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <Server size={20} color="var(--color-primary, #6366f1)" /> Backend API Server
+          </h3>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.35rem",
+                padding: "0.2rem 0.65rem",
+                borderRadius: "9999px",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+                background:
+                  apiStatus === "connected"
+                    ? "rgba(34, 197, 94, 0.15)"
+                    : apiStatus === "checking"
+                    ? "rgba(234, 179, 8, 0.15)"
+                    : "rgba(239, 68, 68, 0.15)",
+                color:
+                  apiStatus === "connected"
+                    ? "#22c55e"
+                    : apiStatus === "checking"
+                    ? "#eab308"
+                    : "#ef4444",
+                border: `1px solid ${
+                  apiStatus === "connected"
+                    ? "rgba(34, 197, 94, 0.3)"
+                    : apiStatus === "checking"
+                    ? "rgba(234, 179, 8, 0.3)"
+                    : "rgba(239, 68, 68, 0.3)"
+                }`,
+              }}
+            >
+              <span
+                style={{
+                  width: "6px",
+                  height: "6px",
+                  borderRadius: "50%",
+                  background:
+                    apiStatus === "connected"
+                      ? "#22c55e"
+                      : apiStatus === "checking"
+                      ? "#eab308"
+                      : "#ef4444",
+                }}
+              />
+              {apiStatus === "connected"
+                ? "Connected"
+                : apiStatus === "checking"
+                ? "Checking…"
+                : "Disconnected"}
+            </span>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => checkApiHealth()}
+              disabled={apiTesting}
+              style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+              title="Test Connection"
+            >
+              <RefreshCw size={12} className={apiTesting ? "spin-icon" : ""} />
+            </button>
+          </div>
+        </div>
+
+        <p style={{ color: "var(--color-text-secondary, #94a3b8)", fontSize: "0.85rem", marginTop: 0, marginBottom: "1rem" }}>
+          Configure where this frontend sends API requests. Hosted Vercel deployments automatically connect to your Render cloud backend, while local testing routes to localhost.
+        </p>
+
+        <form onSubmit={handleSaveBackendUrl}>
+          <div className="form-group" style={{ marginBottom: "1rem" }}>
+            <label className="form-label" style={{ display: "flex", justifyContent: "space-between" }}>
+              <span>API Base URL</span>
+              <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted, #64748b)" }}>
+                Default: {DEFAULT_PROD_API_URL}
+              </span>
+            </label>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <input
+                type="text"
+                className="form-input"
+                style={{ flex: 1, minWidth: "240px" }}
+                value={backendUrl}
+                onChange={(e) => setBackendUrl(e.target.value)}
+                placeholder="https://your-backend.onrender.com"
+              />
+              <button
+                type="submit"
+                className="btn btn-primary btn-sm"
+                disabled={apiTesting}
+              >
+                Save & Connect
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleResetBackendUrl}
+                disabled={apiTesting}
+              >
+                Reset Default
+              </button>
+            </div>
+          </div>
+
+          {apiMessage && (
+            <p
+              style={{
+                fontSize: "0.82rem",
+                marginTop: "0.5rem",
+                marginBottom: 0,
+                color: apiStatus === "connected" ? "#22c55e" : "#f87171",
+              }}
+            >
+              {apiStatus === "connected" ? "✓" : "⚠"} {apiMessage}
             </p>
           )}
         </form>
