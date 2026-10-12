@@ -95,11 +95,17 @@ async def analyze_market_data(
         watched_orgs=watched_orgs or [],
     )
 
-    models_to_try = [settings.openrouter_model]
-    if "google/gemini-2.5-flash" not in models_to_try:
-        models_to_try.append("google/gemini-2.5-flash")
-    if "google/gemini-2.5-flash-lite" not in models_to_try:
-        models_to_try.append("google/gemini-2.5-flash-lite")
+    # Only send requests to OpenRouter's free router or explicitly free models.
+    # This prevents a stale paid model in the environment from consuming credits.
+    free_models = [
+        settings.openrouter_model
+        if settings.openrouter_model == "openrouter/free"
+        or settings.openrouter_model.endswith(":free")
+        else "openrouter/free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "deepseek/deepseek-r1:free",
+    ]
+    models_to_try = list(dict.fromkeys(free_models))
 
     last_error = None
     try:
@@ -261,4 +267,3 @@ def _build_prompt(
         parts.append("No news, calendar, or social items collected in this cycle.")
 
     return "\n".join(parts)
-
