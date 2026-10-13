@@ -136,7 +136,16 @@ async def analyze_market_data(
                     data = response.json()
 
                     # Extract the assistant's message content
-                    content = data["choices"][0]["message"]["content"]
+                    message = data["choices"][0]["message"]
+                    if not isinstance(message, dict):
+                        raise TypeError("OpenRouter returned an invalid message object")
+                    content = message.get("content")
+                    if not isinstance(content, str) or not content.strip():
+                        refusal = message.get("refusal")
+                        raise ValueError(
+                            f"OpenRouter returned no text content"
+                            f"{f' (refusal: {refusal})' if refusal else ''}"
+                        )
                     result = json.loads(content)
 
                     # Sanitize and normalize alert fields to database constraints
@@ -181,6 +190,10 @@ async def analyze_market_data(
                 except httpx.HTTPStatusError as err:
                     last_error = err
                     logger.warning(f"OpenRouter model {model_name} failed: {err.response.status_code} {err.response.text}")
+                    continue
+                except (KeyError, TypeError, json.JSONDecodeError) as err:
+                    last_error = err
+                    logger.warning("OpenRouter model %s returned an unusable response: %s", model_name, err)
                     continue
 
         if last_error:

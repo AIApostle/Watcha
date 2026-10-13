@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     app_name: str = "Watcha"
     debug: bool = False
     cors_origins: str = "http://localhost:5173"
+    render_service_url: str = "https://watcha-backend.onrender.com"
 
     # --- Supabase ---
     supabase_url: str = Field(..., description="Supabase project URL")

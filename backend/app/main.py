@@ -5,15 +5,35 @@ Configures the FastAPI app with CORS, lifespan management,
 and mounts all API routers.
 """
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
+KEEP_ALIVE_INTERVAL_SECONDS = 14 * 60 + 59
+
+
+async def _keep_render_alive(service_url: str) -> None:
+    """Ping the deployed service before Render's inactivity window elapses."""
+    health_url = f"{service_url.rstrip('/')}/api/health"
+    timeout = httpx.Timeout(20.0)
+
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        while True:
+            await asyncio.sleep(KEEP_ALIVE_INTERVAL_SECONDS)
+            try:
+                response = await client.get(health_url)
+                response.raise_for_status()
+                logger.info("Render keep-alive ping succeeded.")
+            except (httpx.HTTPError, OSError) as exc:
+                logger.warning("Render keep-alive ping failed: %s", exc)
+
 
 # ── Lazy imports for routers (avoids circular imports at module load) ─────────
 
@@ -38,15 +58,22 @@ def _register_routers(app: FastAPI) -> None:
 async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle."""
     logger.info("🚀 Watcha starting up…")
+    keep_alive_task = asyncio.create_task(
+        _keep_render_alive(get_settings().render_service_url)
+    )
     # Agent worker auto-start could go here in the future
-    yield
-    logger.info("🛑 Watcha shutting down…")
-    # Cleanup: stop APScheduler if running
-    from app.agent.worker import agent_worker
+    try:
+        yield
+    finally:
+        keep_alive_task.cancel()
+        await asyncio.gather(keep_alive_task, return_exceptions=True)
+        logger.info("🛑 Watcha shutting down…")
+        # Cleanup: stop APScheduler if running
+        from app.agent.worker import agent_worker
 
-    if agent_worker.is_running:
-        await agent_worker.stop()
-        logger.info("Agent worker stopped.")
+        if agent_worker.is_running:
+            await agent_worker.stop()
+            logger.info("Agent worker stopped.")
 
 
 # ── App Factory ──────────────────────────────────────────────────────────────

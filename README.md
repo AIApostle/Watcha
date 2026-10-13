@@ -69,6 +69,16 @@ npm run dev
 | OpenRouter | AI Analysis | https://openrouter.ai | Free / Pay-per-token models |
 | Telegram Bot | Push Notifications | https://t.me/botfather | Free |
 
+### Render keep-alive
+
+The backend includes an in-process heartbeat that calls `/api/health` every
+899 seconds (14 minutes and 59 seconds). Set `RENDER_SERVICE_URL` to the
+public Render service URL when deploying.
+
+This heartbeat can prevent an already-running service from becoming idle, but
+it cannot wake the process after Render has already suspended it. A separately
+running external monitor is required for guaranteed wake-ups.
+
 ## Features
 
 - 📊 **Live market prices** — Gold (XAU/USD), Forex pairs, Crypto via Finnhub
